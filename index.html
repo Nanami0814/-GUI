@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>手の動き検知デモ</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #07111f;
+				--panel: rgba(13, 24, 41, 0.88);
+				--panel-border: rgba(148, 163, 184, 0.2);
+				--text: #e2e8f0;
+				--muted: #94a3b8;
+				--accent: #7dd3fc;
+				--accent-strong: #22c55e;
+				--warn: #f59e0b;
+				--shadow: 0 30px 80px rgba(2, 6, 23, 0.5);
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				height: 100%;
+			}
+
+			body {
+				margin: 0;
+				font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				color: var(--text);
+				background:
+					radial-gradient(circle at top left, rgba(14, 165, 233, 0.26), transparent 30%),
+					radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.2), transparent 34%),
+					linear-gradient(160deg, #020617 0%, #07111f 50%, #0f172a 100%);
+			}
+
+			.page {
+				min-height: 100%;
+				display: grid;
+				place-items: center;
+				padding: 24px;
+			}
+
+			.shell {
+				width: min(1180px, 100%);
+				display: grid;
+				gap: 20px;
+				grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.85fr);
+			}
+
+			.hero,
+			.panel {
+				background: var(--panel);
+				border: 1px solid var(--panel-border);
+				border-radius: 28px;
+				box-shadow: var(--shadow);
+				backdrop-filter: blur(18px);
+			}
+
+			.hero {
+				overflow: hidden;
+				position: relative;
+				padding: 22px;
+			}
+
+			.hero::before {
+				content: "";
+				position: absolute;
+				inset: 0;
+				background:
+					linear-gradient(135deg, rgba(125, 211, 252, 0.18), transparent 36%),
+					linear-gradient(315deg, rgba(34, 197, 94, 0.12), transparent 34%);
+				pointer-events: none;
+			}
+
+			.hero-header {
+				position: relative;
+				display: flex;
+				flex-wrap: wrap;
+				gap: 16px;
+				align-items: end;
+				justify-content: space-between;
+				margin-bottom: 18px;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: clamp(2rem, 4vw, 3.35rem);
+				line-height: 1;
+				letter-spacing: 0.02em;
+			}
+
+			.subtitle {
+				margin: 10px 0 0;
+				color: var(--muted);
+				max-width: 60ch;
+				line-height: 1.7;
+			}
+
+			.status-pill {
+				position: relative;
+				display: inline-flex;
+				align-items: center;
+				gap: 10px;
+				border-radius: 999px;
+				padding: 10px 14px;
+				background: rgba(15, 23, 42, 0.78);
+				border: 1px solid rgba(125, 211, 252, 0.22);
+				color: var(--text);
+				font-weight: 600;
+			}
+
+			.status-dot {
+				width: 10px;
+				height: 10px;
+				border-radius: 999px;
+				background: var(--warn);
+				box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.15);
+			}
+
+			.stage {
+				position: relative;
+				border-radius: 24px;
+				overflow: hidden;
+				background: #020617;
+				border: 1px solid rgba(148, 163, 184, 0.16);
+				aspect-ratio: 16 / 10;
+			}
+
+			video,
+			canvas {
+				position: absolute;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+
+			video {
+				transform: scaleX(-1);
+			}
+
+			canvas {
+				pointer-events: none;
+			}
+
+			.overlay-label {
+				position: absolute;
+				left: 16px;
+				bottom: 16px;
+				padding: 8px 12px;
+				border-radius: 999px;
+				background: rgba(2, 6, 23, 0.7);
+				color: #cbd5e1;
+				font-size: 0.92rem;
+				border: 1px solid rgba(148, 163, 184, 0.18);
+			}
+
+			.panel {
+				padding: 22px;
+				display: grid;
+				gap: 18px;
+				align-content: start;
+			}
+
+			.section-title {
+				margin: 0 0 6px;
+				font-size: 1rem;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--muted);
+			}
+
+			.metric {
+				padding: 16px;
+				border-radius: 20px;
+				background: rgba(15, 23, 42, 0.68);
+				border: 1px solid rgba(148, 163, 184, 0.16);
+			}
+
+			.metric strong {
+				display: block;
+				font-size: 1.45rem;
+				margin-top: 6px;
+			}
+
+			.metric small {
+				display: block;
+				margin-top: 6px;
+				color: var(--muted);
+				line-height: 1.6;
+			}
+
+			.controls {
+				display: grid;
+				gap: 12px;
+			}
+
+			button {
+				appearance: none;
+				border: 0;
+				border-radius: 16px;
+				padding: 14px 16px;
+				font: inherit;
+				font-weight: 700;
+				cursor: pointer;
+				transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+			}
+
+			button:hover {
+				transform: translateY(-1px);
+			}
+
+			button:active {
+				transform: translateY(0);
+			}
+
+			.primary {
+				background: linear-gradient(135deg, #38bdf8, #22c55e);
+				color: #05111f;
+				box-shadow: 0 16px 36px rgba(34, 197, 94, 0.22);
+			}
+
+			.secondary {
+				background: rgba(15, 23, 42, 0.9);
+				color: var(--text);
+				border: 1px solid rgba(148, 163, 184, 0.18);
+			}
+
+			.sliders {
+				display: grid;
+				gap: 14px;
+			}
+
+			.slider-row {
+				display: grid;
+				gap: 8px;
+			}
+
+			.slider-row label {
+				display: flex;
+				justify-content: space-between;
+				gap: 12px;
+				color: var(--text);
+				font-weight: 600;
+			}
+
+			input[type="range"] {
+				width: 100%;
+				accent-color: var(--accent);
+			}
+
+			.hint {
+				margin: 0;
+				color: var(--muted);
+				line-height: 1.7;
+				font-size: 0.95rem;
+			}
+
+			.fine-print {
+				color: #94a3b8;
+				font-size: 0.84rem;
+				line-height: 1.6;
+			}
+
+			@media (max-width: 980px) {
+				.shell {
+					grid-template-columns: 1fr;
+				}
+			}
+
+			@media (max-width: 640px) {
+				.page {
+					padding: 14px;
+				}
+
+				.hero,
+				.panel {
+					border-radius: 22px;
+					padding: 16px;
+				}
+
+				.stage {
+					aspect-ratio: 4 / 5;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main class="page">
+			<div class="shell">
+				<section class="hero">
+					<div class="hero-header">
+						<div>
+							<h1>手の動き検知デモ</h1>
+							<p class="subtitle">
+								カメラ映像から手のランドマークを検出し、手首の移動量をもとに「静止」「動きあり」を判定します。
+							</p>
+						</div>
+						<div class="status-pill" id="status-pill">
+							<span class="status-dot" id="status-dot"></span>
+							<span id="status-text">カメラ待機中</span>
+						</div>
+					</div>
+
+					<div class="stage" aria-label="camera preview">
+						<video id="video" playsinline muted autoplay></video>
+						<canvas id="canvas"></canvas>
+						<div class="overlay-label" id="overlay-label">手をフレーム内に入れてください</div>
+					</div>
+				</section>
+
+				<aside class="panel">
+					<div>
+						<p class="section-title">Detection</p>
+						<div class="metric">
+							<span>Motion score</span>
+							<strong id="motion-score">0.0</strong>
+							<small>大きいほど手が動いています。しきい値を超えると「動きあり」と判定します。</small>
+						</div>
+					</div>
+
+					<div class="controls">
+						<button class="primary" id="start-button">カメラを開始</button>
+						<button class="secondary" id="stop-button" disabled>停止</button>
+					</div>
+
+					<div class="sliders">
+						<div class="slider-row">
+							<label for="motion-threshold"><span>Movement threshold</span><span id="motion-threshold-value">0.045</span></label>
+							<input id="motion-threshold" type="range" min="0.01" max="0.15" step="0.005" value="0.045" />
+						</div>
+						<div class="slider-row">
+							<label for="hand-limit"><span>Max hands</span><span id="hand-limit-value">2</span></label>
+							<input id="hand-limit" type="range" min="1" max="2" step="1" value="2" />
+						</div>
+					</div>
+
+					<div>
+						<p class="section-title">How it works</p>
+						<p class="hint">
+							1. カメラを開始します。<br />
+							2. 手首の位置変化を追跡します。<br />
+							3. しきい値を超えたら「動きあり」と表示します。
+						</p>
+					</div>
+
+					<p class="fine-print">
+						画像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。
+					</p>
+				</aside>
+			</div>
+		</main>
+
+		<script type="module">
+			import {
+				FilesetResolver,
+				HandLandmarker,
+				DrawingUtils,
+			} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm";
+
+			const video = document.getElementById('video');
+			const canvas = document.getElementById('canvas');
+			const ctx = canvas.getContext('2d');
+			const startButton = document.getElementById('start-button');
+			const stopButton = document.getElementById('stop-button');
+			const motionScore = document.getElementById('motion-score');
+			const statusText = document.getElementById('status-text');
+			const statusDot = document.getElementById('status-dot');
+			const overlayLabel = document.getElementById('overlay-label');
+			const motionThresholdInput = document.getElementById('motion-threshold');
+			const motionThresholdValue = document.getElementById('motion-threshold-value');
+			const handLimitInput = document.getElementById('hand-limit');
+			const handLimitValue = document.getElementById('hand-limit-value');
+
+			let stream = null;
+			let handLandmarker = null;
+			let drawingUtils = null;
+			let running = false;
+			let previousWrist = null;
+			let previousTimestamp = 0;
+			let motionValue = 0;
+			let animationFrame = 0;
+			let detectedHands = 0;
+
+			const setStatus = (text, color) => {
+				statusText.textContent = text;
+				statusDot.style.background = color;
+				statusDot.style.boxShadow = `0 0 0 6px ${color}26`;
+			};
+
+			const updateMotionDisplay = (value) => {
+				motionScore.textContent = value.toFixed(3);
+			};
+
+			const resizeCanvas = () => {
+				const rect = canvas.getBoundingClientRect();
+				const pixelRatio = window.devicePixelRatio || 1;
+				canvas.width = Math.max(1, Math.round(rect.width * pixelRatio));
+				canvas.height = Math.max(1, Math.round(rect.height * pixelRatio));
+				ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+			};
+
+			const closeStreamTracks = () => {
+				if (stream) {
+					for (const track of stream.getTracks()) {
+						track.stop();
+					}
+					stream = null;
+				}
+			};
+
+			const updateDetectionState = (score) => {
+				const threshold = Number(motionThresholdInput.value);
+				if (detectedHands === 0) {
+					overlayLabel.textContent = '手をフレーム内に入れてください';
+					setStatus('手を探しています', '#f59e0b');
+					return;
+				}
+
+				if (score >= threshold) {
+					overlayLabel.textContent = '動きあり';
+					setStatus('動きあり', '#22c55e');
+				} else {
+					overlayLabel.textContent = '静止';
+					setStatus('静止', '#7dd3fc');
+				}
+			};
+
+			const detectFrame = async () => {
+				if (!running || !handLandmarker || video.readyState < 2) {
+					animationFrame = requestAnimationFrame(detectFrame);
+					return;
+				}
+
+				const now = performance.now();
+				if (now - previousTimestamp < 16) {
+					animationFrame = requestAnimationFrame(detectFrame);
+					return;
+				}
+				previousTimestamp = now;
+
+				const results = handLandmarker.detectForVideo(video, now);
+				detectedHands = results.landmarks?.length ?? 0;
+
+				resizeCanvas();
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+				if (results.landmarks?.length) {
+					if (!drawingUtils) {
+						drawingUtils = new DrawingUtils(ctx);
+					}
+
+					for (const landmarks of results.landmarks) {
+						drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, {
+							color: '#38bdf8',
+							lineWidth: 4,
+						});
+						drawingUtils.drawLandmarks(landmarks, {
+							color: '#f8fafc',
+							lineWidth: 1,
+							radius: 3,
+						});
+
+						const wrist = landmarks[0];
+						if (wrist) {
+							if (previousWrist) {
+								const delta = Math.hypot(wrist.x - previousWrist.x, wrist.y - previousWrist.y);
+								motionValue = motionValue * 0.8 + delta * 0.2;
+								updateMotionDisplay(motionValue);
+								updateDetectionState(motionValue);
+							}
+							previousWrist = wrist;
+
+							// Draw a circle following the hand
+							const x = wrist.x * canvas.width;
+							const y = wrist.y * canvas.height;
+							ctx.fillStyle = '#7dd3fc';
+							ctx.beginPath();
+							ctx.arc(x, y, 30, 0, Math.PI * 2);
+							ctx.fill();
+							ctx.strokeStyle = '#38bdf8';
+							ctx.lineWidth = 3;
+							ctx.stroke();
+							break;
+						}
+					}
+				} else {
+					motionValue = motionValue * 0.92;
+					updateMotionDisplay(motionValue);
+					updateDetectionState(motionValue);
+				}
+
+				animationFrame = requestAnimationFrame(detectFrame);
+			};
+
+			const startCamera = async () => {
+				if (running) {
+					return;
+				}
+
+				setStatus('準備中', '#f59e0b');
+				overlayLabel.textContent = 'カメラを準備しています';
+
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: {
+						facingMode: 'user',
+					},
+					audio: false,
+				});
+
+				video.srcObject = stream;
+				await video.play();
+
+				const vision = await FilesetResolver.forVisionTasks(
+					'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
+				);
+
+				handLandmarker = await HandLandmarker.createFromOptions(vision, {
+					baseOptions: {
+						modelAssetPath:
+							'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+					},
+					runningMode: 'VIDEO',
+					numHands: Number(handLimitInput.value),
+					minHandDetectionConfidence: 0.5,
+					minHandPresenceConfidence: 0.5,
+					minTrackingConfidence: 0.5,
+				});
+
+				drawingUtils = new DrawingUtils(ctx);
+				running = true;
+				previousWrist = null;
+				motionValue = 0;
+				previousTimestamp = 0;
+				detectedHands = 0;
+				updateMotionDisplay(motionValue);
+				setStatus('検知中', '#22c55e');
+				startButton.disabled = true;
+				stopButton.disabled = false;
+				overlayLabel.textContent = '検知中';
+				animationFrame = requestAnimationFrame(detectFrame);
+			};
+
+			const stopCamera = () => {
+				running = false;
+				if (animationFrame) {
+					cancelAnimationFrame(animationFrame);
+					animationFrame = 0;
+				}
+				previousWrist = null;
+				motionValue = 0;
+				detectedHands = 0;
+				updateMotionDisplay(motionValue);
+				setStatus('停止中', '#f59e0b');
+				overlayLabel.textContent = '手をフレーム内に入れてください';
+				startButton.disabled = false;
+				stopButton.disabled = true;
+				closeStreamTracks();
+				video.srcObject = null;
+			};
+
+			motionThresholdInput.addEventListener('input', () => {
+				motionThresholdValue.textContent = Number(motionThresholdInput.value).toFixed(3);
+				updateDetectionState(motionValue);
+			});
+
+			handLimitInput.addEventListener('input', () => {
+				handLimitValue.textContent = handLimitInput.value;
+			});
+
+			startButton.addEventListener('click', () => {
+				startCamera().catch((error) => {
+					console.error(error);
+					setStatus('カメラを開けません', '#f59e0b');
+					overlayLabel.textContent = 'カメラ権限を確認してください';
+					startButton.disabled = false;
+					stopButton.disabled = true;
+					closeStreamTracks();
+				});
+			});
+
+			stopButton.addEventListener('click', stopCamera);
+
+			window.addEventListener('resize', resizeCanvas);
+			resizeCanvas();
+			updateMotionDisplay(0);
+			setStatus('カメラ待機中', '#f59e0b');
+
+			// Automatically start camera when page loads
+			window.addEventListener('load', () => {
+				startCamera().catch((error) => {
+					console.error(error);
+					setStatus('カメラを開けません', '#f59e0b');
+					overlayLabel.textContent = 'カメラ権限を確認してください';
+					startButton.disabled = false;
+					stopButton.disabled = true;
+					closeStreamTracks();
+				});
+			});
+		</script>
+	</body>
+</html>
