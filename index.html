@@ -3,632 +3,369 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>手の動き検知デモ</title>
-		<style>
-			:root {
-				color-scheme: dark;
-				--bg: #07111f;
-				--panel: rgba(13, 24, 41, 0.88);
-				--panel-border: rgba(148, 163, 184, 0.2);
-				--text: #e2e8f0;
-				--muted: #94a3b8;
-				--accent: #7dd3fc;
-				--accent-strong: #22c55e;
-				--warn: #f59e0b;
-				--shadow: 0 30px 80px rgba(2, 6, 23, 0.5);
-			}
-
-			* {
-				box-sizing: border-box;
-			}
-
-			html,
-			body {
-				height: 100%;
-			}
-
-			body {
-				margin: 0;
-				font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-				color: var(--text);
-				background:
-					radial-gradient(circle at top left, rgba(14, 165, 233, 0.26), transparent 30%),
-					radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.2), transparent 34%),
-					linear-gradient(160deg, #020617 0%, #07111f 50%, #0f172a 100%);
-			}
-
-			.page {
-				min-height: 100%;
-				display: grid;
-				place-items: center;
-				padding: 24px;
-			}
-
-			.shell {
-				width: min(1180px, 100%);
-				display: grid;
-				gap: 20px;
-				grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.85fr);
-			}
-
-			.hero,
-			.panel {
-				background: var(--panel);
-				border: 1px solid var(--panel-border);
-				border-radius: 28px;
-				box-shadow: var(--shadow);
-				backdrop-filter: blur(18px);
-			}
-
-			.hero {
-				overflow: hidden;
-				position: relative;
-				padding: 22px;
-			}
-
-			.hero::before {
-				content: "";
-				position: absolute;
-				inset: 0;
-				background:
-					linear-gradient(135deg, rgba(125, 211, 252, 0.18), transparent 36%),
-					linear-gradient(315deg, rgba(34, 197, 94, 0.12), transparent 34%);
-				pointer-events: none;
-			}
-
-			.hero-header {
-				position: relative;
-				display: flex;
-				flex-wrap: wrap;
-				gap: 16px;
-				align-items: end;
-				justify-content: space-between;
-				margin-bottom: 18px;
-			}
-
-			h1 {
-				margin: 0;
-				font-size: clamp(2rem, 4vw, 3.35rem);
-				line-height: 1;
-				letter-spacing: 0.02em;
-			}
-
-			.subtitle {
-				margin: 10px 0 0;
-				color: var(--muted);
-				max-width: 60ch;
-				line-height: 1.7;
-			}
-
-			.status-pill {
-				position: relative;
-				display: inline-flex;
-				align-items: center;
-				gap: 10px;
-				border-radius: 999px;
-				padding: 10px 14px;
-				background: rgba(15, 23, 42, 0.78);
-				border: 1px solid rgba(125, 211, 252, 0.22);
-				color: var(--text);
-				font-weight: 600;
-			}
-
-			.status-dot {
-				width: 10px;
-				height: 10px;
-				border-radius: 999px;
-				background: var(--warn);
-				box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.15);
-			}
-
-			.stage {
-				position: relative;
-				border-radius: 24px;
-				overflow: hidden;
-				background: #020617;
-				border: 1px solid rgba(148, 163, 184, 0.16);
-				aspect-ratio: 16 / 10;
-			}
-
-			video,
-			canvas {
-				position: absolute;
-				inset: 0;
-				width: 100%;
-				height: 100%;
-				object-fit: cover;
-			}
-
-			video {
-				transform: scaleX(-1);
-				display: none;
-			}
-
-			canvas {
-				pointer-events: none;
-			}
-
-			.overlay-label {
-				position: absolute;
-				left: 16px;
-				bottom: 16px;
-				padding: 8px 12px;
-				border-radius: 999px;
-				background: rgba(2, 6, 23, 0.7);
-				color: #cbd5e1;
-				font-size: 0.92rem;
-				border: 1px solid rgba(148, 163, 184, 0.18);
-			}
-
-			.panel {
-				padding: 22px;
-				display: grid;
-				gap: 18px;
-				align-content: start;
-			}
-
-			.section-title {
-				margin: 0 0 6px;
-				font-size: 1rem;
-				letter-spacing: 0.06em;
-				text-transform: uppercase;
-				color: var(--muted);
-			}
-
-			.metric {
-				padding: 16px;
-				border-radius: 20px;
-				background: rgba(15, 23, 42, 0.68);
-				border: 1px solid rgba(148, 163, 184, 0.16);
-			}
-
-			.metric strong {
-				display: block;
-				font-size: 1.45rem;
-				margin-top: 6px;
-			}
-
-			.metric small {
-				display: block;
-				margin-top: 6px;
-				color: var(--muted);
-				line-height: 1.6;
-			}
-
-			.controls {
-				display: grid;
-				gap: 12px;
-			}
-
-			button {
-				appearance: none;
-				border: 0;
-				border-radius: 16px;
-				padding: 14px 16px;
-				font: inherit;
-				font-weight: 700;
-				cursor: pointer;
-				transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-			}
-
-			button:hover {
-				transform: translateY(-1px);
-			}
-
-			button:active {
-				transform: translateY(0);
-			}
-
-			.primary {
-				background: linear-gradient(135deg, #38bdf8, #22c55e);
-				color: #05111f;
-				box-shadow: 0 16px 36px rgba(34, 197, 94, 0.22);
-			}
-
-			.secondary {
-				background: rgba(15, 23, 42, 0.9);
-				color: var(--text);
-				border: 1px solid rgba(148, 163, 184, 0.18);
-			}
-
-			.sliders {
-				display: grid;
-				gap: 14px;
-			}
-
-			.slider-row {
-				display: grid;
-				gap: 8px;
-			}
-
-			.slider-row label {
-				display: flex;
-				justify-content: space-between;
-				gap: 12px;
-				color: var(--text);
-				font-weight: 600;
-			}
-
-			input[type="range"] {
-				width: 100%;
-				accent-color: var(--accent);
-			}
-
-			.hint {
-				margin: 0;
-				color: var(--muted);
-				line-height: 1.7;
-				font-size: 0.95rem;
-			}
-
-			.fine-print {
-				color: #94a3b8;
-				font-size: 0.84rem;
-				line-height: 1.6;
-			}
-
-			@media (max-width: 980px) {
-				.shell {
-					grid-template-columns: 1fr;
-				}
-			}
-
-			@media (max-width: 640px) {
-				.page {
-					padding: 14px;
-				}
-
-				.hero,
-				.panel {
-					border-radius: 22px;
-					padding: 16px;
-				}
-
-				.stage {
-					aspect-ratio: 4 / 5;
-				}
-			}
-
-			@keyframes ballFloat {
-				0% {
-					transform: translate(-50%, -50%) translate(0, 0);
-				}
-				25% {
-					transform: translate(-50%, -50%) translate(100px, -80px);
-				}
-				50% {
-					transform: translate(-50%, -50%) translate(80px, 100px);
-				}
-				75% {
-					transform: translate(-50%, -50%) translate(-100px, 60px);
-				}
-				100% {
-					transform: translate(-50%, -50%) translate(0, 0);
-				}
-			}
-
-			#ball {
-				animation: ballFloat 4s ease-in-out infinite;
-			}
-
-			#ball.hidden {
-				display: none;
-			}
-		</style>
+		<title>お祓いWebサイト</title>
+		<link rel="stylesheet" href="styles.css" />
 	</head>
 	<body>
-		<main class="page">
-			<div class="shell">
-				<section class="hero">
-					<div class="hero-header">
-						<div>
-							<h1>手の動き検知デモ</h1>
-							<p class="subtitle">
-								カメラ映像から手のランドマークを検出し、手首の移動量をもとに「静止」「動きあり」を判定します。
-							</p>
-						</div>
-						<div class="status-pill" id="status-pill">
-							<span class="status-dot" id="status-dot"></span>
-							<span id="status-text">カメラ待機中</span>
-						</div>
-					</div>
+		<h1 class="title">お祓いWebサイト</h1>
 
-					<div class="stage" aria-label="camera preview">
-					<svg id="ball-display" width="100%" height="100%" style="position: absolute; inset: 0;">
-						<circle id="ball" cx="50%" cy="50%" r="30" fill="#7dd3fc" stroke="#38bdf8" stroke-width="3" class="hidden" />
-					</svg>
-						<canvas id="canvas"></canvas>
-						<div class="overlay-label" id="overlay-label">手をフレーム内に入れてください</div>
-					</div>
-				</section>
+		<!-- 検知用（画面には出さない） -->
+		<video id="video" playsinline muted></video>
+		<canvas id="proc" style="display: none"></canvas>
 
-				<aside class="panel">
-					<div>
-						<p class="section-title">Detection</p>
-						<div class="metric">
-							<span>Motion score</span>
-							<strong id="motion-score">0.0</strong>
-							<small>大きいほど手が動いています。しきい値を超えると「動きあり」と判定します。</small>
-						</div>
-					</div>
+		<!-- three.js の3D御幣＋手のボーン -->
+		<canvas id="scene"></canvas>
 
-					<div class="controls">
-						<button class="primary" id="start-button">カメラを開始</button>
-						<button class="secondary" id="stop-button" disabled>停止</button>
-					</div>
-
-					<div class="sliders">
-						<div class="slider-row">
-							<label for="motion-threshold"><span>Movement threshold</span><span id="motion-threshold-value">0.045</span></label>
-							<input id="motion-threshold" type="range" min="0.01" max="0.15" step="0.005" value="0.045" />
-						</div>
-						<div class="slider-row">
-							<label for="hand-limit"><span>Max hands</span><span id="hand-limit-value">2</span></label>
-							<input id="hand-limit" type="range" min="1" max="2" step="1" value="2" />
-						</div>
-					</div>
-
-					<div>
-						<p class="section-title">How it works</p>
-						<p class="hint">
-							1. カメラを開始します。<br />
-							2. 手首の位置変化を追跡します。<br />
-							3. しきい値を超えたら「動きあり」と表示します。
-						</p>
-					</div>
-
-					<p class="fine-print">
-						画像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。
-					</p>
-				</aside>
-			</div>
-		</main>
+		<p class="caption" id="caption">読み込み中…</p>
+		<p class="note">映像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。</p>
 
 		<script type="module">
-			const video = document.getElementById('video');
-			const canvas = document.getElementById('canvas');
-			const ctx = canvas.getContext('2d');
-			const ballElement = document.getElementById('ball');
-			const startButton = document.getElementById('start-button');
-			const stopButton = document.getElementById('stop-button');
-			const motionScore = document.getElementById('motion-score');
-			const statusText = document.getElementById('status-text');
-			const statusDot = document.getElementById('status-dot');
-			const overlayLabel = document.getElementById('overlay-label');
-			const motionThresholdInput = document.getElementById('motion-threshold');
-			const motionThresholdValue = document.getElementById('motion-threshold-value');
-			const handLimitInput = document.getElementById('hand-limit');
-			const handLimitValue = document.getElementById('hand-limit-value');
+			import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
+			const video = document.getElementById('video');
+			const caption = document.getElementById('caption');
+			const setCaption = (text) => { caption.textContent = text; };
+
+			const NUM_HANDS = 1;
+
+			const HAND_CONNECTIONS = [
+				[0, 1], [1, 2], [2, 3], [3, 4],
+				[0, 5], [5, 6], [6, 7], [7, 8],
+				[5, 9], [9, 10], [10, 11], [11, 12],
+				[9, 13], [13, 14], [14, 15], [15, 16],
+				[13, 17], [17, 18], [18, 19], [19, 20],
+				[0, 17],
+			];
+
+			// ====== three.js セットアップ ======
+			const sceneCanvas = document.getElementById('scene');
+			const renderer = new THREE.WebGLRenderer({ canvas: sceneCanvas, antialias: true, alpha: true });
+			renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+			const scene = new THREE.Scene();
+			const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+			camera.position.set(0, 0, 6);
+
+			scene.add(new THREE.AmbientLight(0xfff4e0, 0.85));
+			const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+			keyLight.position.set(3, 4, 5);
+			scene.add(keyLight);
+			const fillLight = new THREE.DirectionalLight(0xffe2b8, 0.45);
+			fillLight.position.set(-4, 1, 2);
+			scene.add(fillLight);
+
+			// ---- 御幣（ごへい） ----
+			const wand = new THREE.Group();
+			const stickMat = new THREE.MeshStandardMaterial({ color: 0x6f4a2a, roughness: 0.65, metalness: 0.05 });
+			const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.085, 2.6, 24), stickMat);
+			stick.position.y = -0.6;
+			wand.add(stick);
+			const bindMat = new THREE.MeshStandardMaterial({ color: 0xc8442f, roughness: 0.5, metalness: 0.05 });
+			const bind = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.32, 24), bindMat);
+			bind.position.y = 0.6;
+			wand.add(bind);
+			const paperMat = new THREE.MeshStandardMaterial({ color: 0xfdfcf7, roughness: 0.95, metalness: 0.0, side: THREE.DoubleSide });
+			const makeShide = (sign) => {
+				const s = sign;
+				const shape = new THREE.Shape();
+				shape.moveTo(0, 1.5);
+				shape.lineTo(s * 0.95, 1.5);
+				shape.lineTo(s * 0.45, 1.05);
+				shape.lineTo(s * 1.05, 1.05);
+				shape.lineTo(s * 0.5, 0.55);
+				shape.lineTo(s * 1.1, 0.55);
+				shape.lineTo(s * 0.5, 0.0);
+				shape.lineTo(0, 0.0);
+				shape.closePath();
+				const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: false });
+				geo.translate(0, 0, -0.03);
+				const mesh = new THREE.Mesh(geo, paperMat);
+				mesh.position.y = 0.55;
+				return mesh;
+			};
+			wand.add(makeShide(1));
+			wand.add(makeShide(-1));
+			wand.visible = false;
+			scene.add(wand);
+
+			// ---- 手のボーン（藍色の骨格・任意表示） ----
+			const jointMat = new THREE.MeshStandardMaterial({ color: 0x33576a, roughness: 0.5, metalness: 0.1 });
+			const boneMat = new THREE.MeshStandardMaterial({ color: 0x2d4a5a, roughness: 0.6, metalness: 0.1 });
+			const hand = new THREE.Group();
+			hand.visible = false;
+			scene.add(hand);
+			const jointGeo = new THREE.SphereGeometry(0.05, 16, 16);
+			const joints = [];
+			for (let i = 0; i < 21; i++) {
+				const j = new THREE.Mesh(jointGeo, jointMat);
+				hand.add(j);
+				joints.push(j);
+			}
+			const boneGeo = new THREE.CylinderGeometry(0.025, 0.025, 1, 12);
+			const bones = [];
+			for (let i = 0; i < HAND_CONNECTIONS.length; i++) {
+				const b = new THREE.Mesh(boneGeo, boneMat);
+				hand.add(b);
+				bones.push(b);
+			}
+			const upAxis = new THREE.Vector3(0, 1, 0);
+			const orientBone = (mesh, a, b) => {
+				const dir = new THREE.Vector3().subVectors(b, a);
+				const len = dir.length();
+				mesh.position.copy(a).add(b).multiplyScalar(0.5);
+				mesh.scale.set(1, Math.max(len, 0.0001), 1);
+				if (len > 0.0001) mesh.quaternion.setFromUnitVectors(upAxis, dir.clone().normalize());
+			};
+
+			// ---- 座標変換・リサイズ ----
+			let visW = 1;
+			let visH = 1;
+			const resize = () => {
+				const w = window.innerWidth, h = window.innerHeight;
+				renderer.setSize(w, h, false);
+				camera.aspect = w / h;
+				camera.updateProjectionMatrix();
+				const vFOV = THREE.MathUtils.degToRad(camera.fov);
+				visH = 2 * Math.tan(vFOV / 2) * camera.position.z;
+				visW = visH * camera.aspect;
+			};
+			window.addEventListener('resize', resize);
+			resize();
+
+			// 画面の % → ワールド座標
+			const toWorld = (px, py) => ({
+				wx: ((px / 100) * 2 - 1) * (visW / 2),
+				wy: -((py / 100) * 2 - 1) * (visH / 2),
+			});
+
+			const Z_SCALE = 4;
+			const landmarkToWorld = (lm, out) => {
+				const nx = (1 - lm.x) * 2 - 1; // 鏡像反転
+				const ny = lm.y * 2 - 1;
+				out.set(nx * (visW / 2), -ny * (visH / 2), -lm.z * Z_SCALE);
+				return out;
+			};
+
+			// ====== フレーム差分による動き検知（モデル不要・常に動く） ======
+			const proc = document.getElementById('proc');
+			const pctx = proc.getContext('2d', { willReadFrequently: true });
+			const PW = 96, PH = 96;
+			proc.width = PW;
+			proc.height = PH;
+			const DIFF_THRESHOLD = 22;
+			const MIN_MOVED_PIXELS = PW * PH * 0.004;
+			let previousGray = null;
+			let targetX = 50, targetY = 50; // 動き検知の位置（%）
+
+			const detectMotion = () => {
+				if (video.readyState < 2 || video.videoWidth === 0) return false;
+				pctx.drawImage(video, 0, 0, PW, PH);
+				const frame = pctx.getImageData(0, 0, PW, PH).data;
+				if (!previousGray) {
+					previousGray = new Float32Array(PW * PH);
+					for (let i = 0, p = 0; i < frame.length; i += 4, p++) {
+						previousGray[p] = 0.299 * frame[i] + 0.587 * frame[i + 1] + 0.114 * frame[i + 2];
+					}
+					return false;
+				}
+				let sumX = 0, sumY = 0, count = 0;
+				for (let y = 0; y < PH; y++) {
+					for (let x = 0; x < PW; x++) {
+						const p = y * PW + x;
+						const i = p * 4;
+						const gray = 0.299 * frame[i] + 0.587 * frame[i + 1] + 0.114 * frame[i + 2];
+						const diff = Math.abs(gray - previousGray[p]);
+						previousGray[p] = gray;
+						if (diff > DIFF_THRESHOLD) { sumX += x; sumY += y; count++; }
+					}
+				}
+				if (count < MIN_MOVED_PIXELS) return false;
+				targetX = (1 - (sumX / count) / PW) * 100;
+				targetY = ((sumY / count) / PH) * 100;
+				return true;
+			};
+
+			// 動き検知モードの御幣の現在位置
+			let curX = 0, curY = 0;
+
+			// ====== 手のランドマーク（任意・読み込めたら使う） ======
+			const smooth = [];
+			for (let i = 0; i < 21; i++) smooth.push(new THREE.Vector3());
+			let hasSmooth = false;
+			const tmp = new THREE.Vector3();
+
+			const updateHandAndWand = (landmarks) => {
+				for (let i = 0; i < 21; i++) {
+					landmarkToWorld(landmarks[i], tmp);
+					if (hasSmooth) smooth[i].lerp(tmp, 0.5);
+					else smooth[i].copy(tmp);
+				}
+				hasSmooth = true;
+				for (let i = 0; i < 21; i++) joints[i].position.copy(smooth[i]);
+				for (let i = 0; i < HAND_CONNECTIONS.length; i++) {
+					const [a, b] = HAND_CONNECTIONS[i];
+					orientBone(bones[i], smooth[a], smooth[b]);
+				}
+				const wrist = smooth[0], midMcp = smooth[9];
+				wand.position.copy(tmp.copy(wrist).lerp(midMcp, 0.6));
+				const handSize = wrist.distanceTo(midMcp);
+				wand.scale.setScalar(THREE.MathUtils.clamp(handSize * 3.4, 0.45, 1.6));
+				const angle = Math.atan2(midMcp.y - wrist.y, midMcp.x - wrist.x);
+				wand.rotation.z = angle - Math.PI / 2;
+				wand.rotation.x = THREE.MathUtils.clamp((midMcp.z - wrist.z) * 1.5, -0.6, 0.6);
+				wand.rotation.y = Math.sin(performance.now() / 1000) * 0.15;
+			};
+
+			// 動き検知モード：御幣だけを動かす（ボーンなし）
+			const updateWandByMotion = () => {
+				const { wx, wy } = toWorld(targetX, targetY);
+				const vx = wx - curX;
+				curX += vx * 0.18;
+				curY += (wy - curY) * 0.18;
+				wand.position.set(curX, curY, 0);
+				wand.scale.setScalar(0.62);
+				const t = performance.now() / 1000;
+				wand.rotation.y = Math.sin(t * 1.1) * 0.55;
+				wand.rotation.z += (THREE.MathUtils.clamp(-vx * 0.7, -0.6, 0.6) - wand.rotation.z) * 0.15;
+				wand.rotation.x += (0 - wand.rotation.x) * 0.1;
+			};
+
+			// ====== メインループ ======
+			let running = false;
 			let stream = null;
 			let handLandmarker = null;
-			let drawingUtils = null;
-			let visionModulePromise = null;
-			let running = false;
-			let previousWrist = null;
-			let previousTimestamp = 0;
-			let motionValue = 0;
-			let animationFrame = 0;
-			let detectedHands = 0;
-			let ballX = 0.5;
-			let ballY = 0.5;
-			let animationTime = 0;
+			let modelFailed = false;
 
-			const setStatus = (text, color) => {
-				statusText.textContent = text;
-				statusDot.style.background = color;
-				statusDot.style.boxShadow = `0 0 0 6px ${color}26`;
-			};
-
-			const updateMotionDisplay = (value) => {
-				motionScore.textContent = value.toFixed(3);
-			};
-
-			const loadVisionModule = async () => {
-				if (!visionModulePromise) {
-					visionModulePromise = import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm').catch((error) => {
-						console.warn('Vision module failed to load.', error);
-						return null;
-					});
-				}
-
-				return visionModulePromise;
-			};
-
-			const resizeCanvas = () => {
-				const rect = canvas.getBoundingClientRect();
-				const pixelRatio = window.devicePixelRatio || 1;
-				canvas.width = Math.max(1, Math.round(rect.width * pixelRatio));
-				canvas.height = Math.max(1, Math.round(rect.height * pixelRatio));
-				ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-			};
-
-			const closeStreamTracks = () => {
-				if (stream) {
-					for (const track of stream.getTracks()) {
-						track.stop();
+			const loop = () => {
+				try {
+					if (!running) return;
+					if (video.readyState < 2 || video.videoWidth === 0) {
+						setCaption('カメラ映像を待っています');
+						return;
 					}
-					stream = null;
-				}
-			};
 
-			const updateDetectionState = (score) => {
-				const threshold = Number(motionThresholdInput.value);
-				if (detectedHands === 0) {
-					overlayLabel.textContent = '手をフレーム内に入れてください';
-					setStatus('手を探しています', '#f59e0b');
-					return;
-				}
-
-				if (score >= threshold) {
-					overlayLabel.textContent = '動きあり';
-					setStatus('動きあり', '#22c55e');
-				} else {
-					overlayLabel.textContent = '静止';
-					setStatus('静止', '#7dd3fc');
-				}
-			};
-
-			const detectFrame = async () => {
-				if (!running) {
-					animationFrame = requestAnimationFrame(detectFrame);
-					return;
-				}
-
-				const now = performance.now();
-				if (now - previousTimestamp < 16) {
-					animationFrame = requestAnimationFrame(detectFrame);
-					return;
-				}
-				previousTimestamp = now;
-
-				// Handle hand detection if available
-				if (handLandmarker && video.readyState >= 2) {
-					const results = handLandmarker.detectForVideo(video, now);
-					detectedHands = results.landmarks?.length ?? 0;
-
-					if (results.landmarks?.length) {
-						for (const landmarks of results.landmarks) {
-							const wrist = landmarks[0];
-							if (wrist) {
-								if (previousWrist) {
-									const delta = Math.hypot(wrist.x - previousWrist.x, wrist.y - previousWrist.y);
-									motionValue = motionValue * 0.8 + delta * 0.2;
-									updateMotionDisplay(motionValue);
-									updateDetectionState(motionValue);
-								}
-								previousWrist = wrist;
-								ballX = wrist.x;
-								ballY = wrist.y;
-								break;
-							}
+					let handActive = false;
+					if (handLandmarker) {
+						let results;
+						try {
+							results = handLandmarker.detectForVideo(video, performance.now());
+						} catch (e) {
+							console.error('detectForVideo failed', e);
 						}
-					} else {
-						motionValue = motionValue * 0.92;
-						updateMotionDisplay(motionValue);
-						updateDetectionState(motionValue);
+						const landmarks = results?.landmarks?.[0];
+						if (landmarks) {
+							updateHandAndWand(landmarks);
+							handActive = true;
+						}
 					}
-				} else if (running) {
-					// No hand landmarker or video not ready - animate the ball
-					animationTime += 0.016;
-					ballX = 0.5 + Math.sin(animationTime) * 0.3;
-					ballY = 0.5 + Math.cos(animationTime * 0.7) * 0.3;
+
+					if (handActive) {
+						hand.visible = true;
+						wand.visible = true;
+						setCaption('祓い清め中…');
+					} else {
+						// 手が無い／モデル未読込 → 動き検知で御幣だけ動かす
+						hand.visible = false;
+						hasSmooth = false;
+						const moved = detectMotion();
+						updateWandByMotion();
+						wand.visible = true;
+						if (modelFailed) {
+							setCaption(moved ? '祓い清め中…（手の表示なし）' : '手を動かしてください');
+						} else if (handLandmarker) {
+							setCaption('手をかざしてください');
+						} else {
+							setCaption(moved ? '祓い清め中…' : '手を動かしてください');
+						}
+					}
+				} finally {
+					renderer.render(scene, camera);
+					requestAnimationFrame(loop);
 				}
-
-				// Update ball position using SVG
-				ballElement.setAttribute('cx', (ballX * 100) + '%');
-				ballElement.setAttribute('cy', (ballY * 100) + '%');
-
-				animationFrame = requestAnimationFrame(detectFrame);
 			};
 
-			const startCamera = async () => {
-				if (running) {
+			// ====== MediaPipe 読み込み（複数CDNフォールバック） ======
+			const CDN_BASES = [
+				'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22',
+				'https://unpkg.com/@mediapipe/tasks-vision@0.10.22',
+			];
+			const loadVision = async () => {
+				for (const base of CDN_BASES) {
+					try {
+						const mod = await import(`${base}/vision_bundle.mjs`);
+						const fileset = await mod.FilesetResolver.forVisionTasks(`${base}/wasm`);
+						console.log('Vision loaded from', base);
+						return { HandLandmarker: mod.HandLandmarker, fileset };
+					} catch (e) {
+						console.warn(`Vision load failed from ${base}`, e);
+					}
+				}
+				return null;
+			};
+
+			// 手のボーンは「読めたら追加で出す」。失敗しても御幣表示は続ける
+			const initHandTracking = async () => {
+				const vision = await loadVision();
+				if (!vision) {
+					modelFailed = true;
+					console.warn('手のボーン表示は無効（モデル読み込み失敗）。御幣の動き検知のみで継続します。');
 					return;
 				}
-
-				setStatus('準備中', '#f59e0b');
-				overlayLabel.textContent = 'カメラを準備しています';
-
-				stream = await navigator.mediaDevices.getUserMedia({
-					video: {
-						facingMode: 'user',
-					},
-					audio: false,
-				});
-
-				video.srcObject = stream;
-				await video.play();
-
-				const vision = await loadVisionModule();
-				if (vision) {
-					const { FilesetResolver, HandLandmarker, DrawingUtils } = vision;
-					const visionFileset = await FilesetResolver.forVisionTasks(
-						'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
-					);
-
-					handLandmarker = await HandLandmarker.createFromOptions(visionFileset, {
+				const { HandLandmarker, fileset } = vision;
+				const makeLandmarker = (delegate) =>
+					HandLandmarker.createFromOptions(fileset, {
 						baseOptions: {
 							modelAssetPath:
 								'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+							delegate,
 						},
 						runningMode: 'VIDEO',
-						numHands: Number(handLimitInput.value),
+						numHands: NUM_HANDS,
 						minHandDetectionConfidence: 0.5,
 						minHandPresenceConfidence: 0.5,
 						minTrackingConfidence: 0.5,
 					});
-
-					drawingUtils = new DrawingUtils(ctx);
-				} else {
-					handLandmarker = null;
-					drawingUtils = null;
+				try {
+					handLandmarker = await makeLandmarker('GPU');
+				} catch (gpuError) {
+					console.warn('GPU delegate failed, falling back to CPU.', gpuError);
+					try {
+						handLandmarker = await makeLandmarker('CPU');
+					} catch (cpuError) {
+						modelFailed = true;
+						console.error('HandLandmarker 生成失敗。御幣の動き検知のみで継続します。', cpuError);
+					}
 				}
-
-				running = true;
-				previousWrist = null;
-				motionValue = 0;
-				previousTimestamp = 0;
-				detectedHands = 0;
-				updateMotionDisplay(motionValue);
-				setStatus(handLandmarker ? '検知中' : 'カメラ表示中', handLandmarker ? '#22c55e' : '#7dd3fc');
-				startButton.disabled = true;
-				stopButton.disabled = false;
-				overlayLabel.textContent = handLandmarker ? '検知中' : 'カメラ映像を表示中';
-				animationFrame = requestAnimationFrame(detectFrame);
 			};
 
-			const stopCamera = () => {
-				running = false;
-				if (animationFrame) {
-					cancelAnimationFrame(animationFrame);
-					animationFrame = 0;
-				}
-				previousWrist = null;
-				motionValue = 0;
-				detectedHands = 0;
-				updateMotionDisplay(motionValue);
-				setStatus('停止中', '#f59e0b');
-				overlayLabel.textContent = '手をフレーム内に入れてください';
-				startButton.disabled = false;
-				stopButton.disabled = true;
-				ballElement.classList.add('hidden');
-				closeStreamTracks();
-				video.srcObject = null;
-			};
-
-			motionThresholdInput.addEventListener('input', () => {
-				motionThresholdValue.textContent = Number(motionThresholdInput.value).toFixed(3);
-				updateDetectionState(motionValue);
-			});
-
-			handLimitInput.addEventListener('input', () => {
-				handLimitValue.textContent = handLimitInput.value;
-			});
-
-			startButton.addEventListener('click', () => {
-				running = true;
-				startButton.disabled = true;
-				stopButton.disabled = false;
-				ballElement.classList.remove('hidden');
-				setStatus('検知中', '#22c55e');
-				overlayLabel.textContent = '手の動きを検知しています';
-				animationFrame = requestAnimationFrame(detectFrame);
-
-				startCamera().catch((error) => {
-					console.error(error);
-					setStatus('カメラなし - アニメーション表示', '#7dd3fc');
-					overlayLabel.textContent = 'カメラが利用できないため、玉をアニメーションで表示しています';
+			// ====== 起動 ======
+			const start = async () => {
+				setCaption('カメラを準備しています');
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: { facingMode: 'user' },
+					audio: false,
 				});
+				video.srcObject = stream;
+				await video.play();
+
+				running = true;
+				previousGray = null;
+				wand.visible = true;
+				setCaption('手を動かしてください');
+				requestAnimationFrame(loop);
+
+				// 手のボーンは裏で読み込み（成功したら自動で有効化）
+				initHandTracking();
+			};
+
+			start().catch((error) => {
+				console.error(error);
+				if (error && (error.name === 'NotAllowedError' || error.name === 'NotFoundError')) {
+					setCaption('カメラの許可を確認してください');
+				} else {
+					setCaption('起動に失敗しました（コンソールを確認）');
+				}
 			});
-
-			stopButton.addEventListener('click', stopCamera);
-
-			window.addEventListener('resize', resizeCanvas);
-			resizeCanvas();
-			updateMotionDisplay(0);
-			setStatus('カメラ待機中', '#f59e0b');
-
 		</script>
 	</body>
 </html>
