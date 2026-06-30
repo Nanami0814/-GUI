@@ -141,6 +141,7 @@
 
 			video {
 				transform: scaleX(-1);
+				display: none;
 			}
 
 			canvas {
@@ -287,6 +288,32 @@
 					aspect-ratio: 4 / 5;
 				}
 			}
+
+			@keyframes ballFloat {
+				0% {
+					transform: translate(-50%, -50%) translate(0, 0);
+				}
+				25% {
+					transform: translate(-50%, -50%) translate(100px, -80px);
+				}
+				50% {
+					transform: translate(-50%, -50%) translate(80px, 100px);
+				}
+				75% {
+					transform: translate(-50%, -50%) translate(-100px, 60px);
+				}
+				100% {
+					transform: translate(-50%, -50%) translate(0, 0);
+				}
+			}
+
+			#ball {
+				animation: ballFloat 4s ease-in-out infinite;
+			}
+
+			#ball.hidden {
+				display: none;
+			}
 		</style>
 	</head>
 	<body>
@@ -307,7 +334,9 @@
 					</div>
 
 					<div class="stage" aria-label="camera preview">
-						<video id="video" playsinline muted autoplay></video>
+					<svg id="ball-display" width="100%" height="100%" style="position: absolute; inset: 0;">
+						<circle id="ball" cx="50%" cy="50%" r="30" fill="#7dd3fc" stroke="#38bdf8" stroke-width="3" class="hidden" />
+					</svg>
 						<canvas id="canvas"></canvas>
 						<div class="overlay-label" id="overlay-label">手をフレーム内に入れてください</div>
 					</div>
@@ -356,15 +385,10 @@
 		</main>
 
 		<script type="module">
-			import {
-				FilesetResolver,
-				HandLandmarker,
-				DrawingUtils,
-			} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm";
-
 			const video = document.getElementById('video');
 			const canvas = document.getElementById('canvas');
 			const ctx = canvas.getContext('2d');
+			const ballElement = document.getElementById('ball');
 			const startButton = document.getElementById('start-button');
 			const stopButton = document.getElementById('stop-button');
 			const motionScore = document.getElementById('motion-score');
@@ -379,12 +403,16 @@
 			let stream = null;
 			let handLandmarker = null;
 			let drawingUtils = null;
+			let visionModulePromise = null;
 			let running = false;
 			let previousWrist = null;
 			let previousTimestamp = 0;
 			let motionValue = 0;
 			let animationFrame = 0;
 			let detectedHands = 0;
+			let ballX = 0.5;
+			let ballY = 0.5;
+			let animationTime = 0;
 
 			const setStatus = (text, color) => {
 				statusText.textContent = text;
@@ -394,6 +422,17 @@
 
 			const updateMotionDisplay = (value) => {
 				motionScore.textContent = value.toFixed(3);
+			};
+
+			const loadVisionModule = async () => {
+				if (!visionModulePromise) {
+					visionModulePromise = import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm').catch((error) => {
+						console.warn('Vision module failed to load.', error);
+						return null;
+					});
+				}
+
+				return visionModulePromise;
 			};
 
 			const resizeCanvas = () => {
@@ -431,7 +470,7 @@
 			};
 
 			const detectFrame = async () => {
-				if (!running || !handLandmarker || video.readyState < 2) {
+				if (!running) {
 					animationFrame = requestAnimationFrame(detectFrame);
 					return;
 				}
@@ -443,56 +482,42 @@
 				}
 				previousTimestamp = now;
 
-				const results = handLandmarker.detectForVideo(video, now);
-				detectedHands = results.landmarks?.length ?? 0;
+				// Handle hand detection if available
+				if (handLandmarker && video.readyState >= 2) {
+					const results = handLandmarker.detectForVideo(video, now);
+					detectedHands = results.landmarks?.length ?? 0;
 
-				resizeCanvas();
-				ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-				if (results.landmarks?.length) {
-					if (!drawingUtils) {
-						drawingUtils = new DrawingUtils(ctx);
-					}
-
-					for (const landmarks of results.landmarks) {
-						drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, {
-							color: '#38bdf8',
-							lineWidth: 4,
-						});
-						drawingUtils.drawLandmarks(landmarks, {
-							color: '#f8fafc',
-							lineWidth: 1,
-							radius: 3,
-						});
-
-						const wrist = landmarks[0];
-						if (wrist) {
-							if (previousWrist) {
-								const delta = Math.hypot(wrist.x - previousWrist.x, wrist.y - previousWrist.y);
-								motionValue = motionValue * 0.8 + delta * 0.2;
-								updateMotionDisplay(motionValue);
-								updateDetectionState(motionValue);
+					if (results.landmarks?.length) {
+						for (const landmarks of results.landmarks) {
+							const wrist = landmarks[0];
+							if (wrist) {
+								if (previousWrist) {
+									const delta = Math.hypot(wrist.x - previousWrist.x, wrist.y - previousWrist.y);
+									motionValue = motionValue * 0.8 + delta * 0.2;
+									updateMotionDisplay(motionValue);
+									updateDetectionState(motionValue);
+								}
+								previousWrist = wrist;
+								ballX = wrist.x;
+								ballY = wrist.y;
+								break;
 							}
-							previousWrist = wrist;
-
-							// Draw a circle following the hand
-							const x = wrist.x * canvas.width;
-							const y = wrist.y * canvas.height;
-							ctx.fillStyle = '#7dd3fc';
-							ctx.beginPath();
-							ctx.arc(x, y, 30, 0, Math.PI * 2);
-							ctx.fill();
-							ctx.strokeStyle = '#38bdf8';
-							ctx.lineWidth = 3;
-							ctx.stroke();
-							break;
 						}
+					} else {
+						motionValue = motionValue * 0.92;
+						updateMotionDisplay(motionValue);
+						updateDetectionState(motionValue);
 					}
-				} else {
-					motionValue = motionValue * 0.92;
-					updateMotionDisplay(motionValue);
-					updateDetectionState(motionValue);
+				} else if (running) {
+					// No hand landmarker or video not ready - animate the ball
+					animationTime += 0.016;
+					ballX = 0.5 + Math.sin(animationTime) * 0.3;
+					ballY = 0.5 + Math.cos(animationTime * 0.7) * 0.3;
 				}
+
+				// Update ball position using SVG
+				ballElement.setAttribute('cx', (ballX * 100) + '%');
+				ballElement.setAttribute('cy', (ballY * 100) + '%');
 
 				animationFrame = requestAnimationFrame(detectFrame);
 			};
@@ -515,33 +540,41 @@
 				video.srcObject = stream;
 				await video.play();
 
-				const vision = await FilesetResolver.forVisionTasks(
-					'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
-				);
+				const vision = await loadVisionModule();
+				if (vision) {
+					const { FilesetResolver, HandLandmarker, DrawingUtils } = vision;
+					const visionFileset = await FilesetResolver.forVisionTasks(
+						'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
+					);
 
-				handLandmarker = await HandLandmarker.createFromOptions(vision, {
-					baseOptions: {
-						modelAssetPath:
-							'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-					},
-					runningMode: 'VIDEO',
-					numHands: Number(handLimitInput.value),
-					minHandDetectionConfidence: 0.5,
-					minHandPresenceConfidence: 0.5,
-					minTrackingConfidence: 0.5,
-				});
+					handLandmarker = await HandLandmarker.createFromOptions(visionFileset, {
+						baseOptions: {
+							modelAssetPath:
+								'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+						},
+						runningMode: 'VIDEO',
+						numHands: Number(handLimitInput.value),
+						minHandDetectionConfidence: 0.5,
+						minHandPresenceConfidence: 0.5,
+						minTrackingConfidence: 0.5,
+					});
 
-				drawingUtils = new DrawingUtils(ctx);
+					drawingUtils = new DrawingUtils(ctx);
+				} else {
+					handLandmarker = null;
+					drawingUtils = null;
+				}
+
 				running = true;
 				previousWrist = null;
 				motionValue = 0;
 				previousTimestamp = 0;
 				detectedHands = 0;
 				updateMotionDisplay(motionValue);
-				setStatus('検知中', '#22c55e');
+				setStatus(handLandmarker ? '検知中' : 'カメラ表示中', handLandmarker ? '#22c55e' : '#7dd3fc');
 				startButton.disabled = true;
 				stopButton.disabled = false;
-				overlayLabel.textContent = '検知中';
+				overlayLabel.textContent = handLandmarker ? '検知中' : 'カメラ映像を表示中';
 				animationFrame = requestAnimationFrame(detectFrame);
 			};
 
@@ -559,6 +592,7 @@
 				overlayLabel.textContent = '手をフレーム内に入れてください';
 				startButton.disabled = false;
 				stopButton.disabled = true;
+				ballElement.classList.add('hidden');
 				closeStreamTracks();
 				video.srcObject = null;
 			};
@@ -573,13 +607,18 @@
 			});
 
 			startButton.addEventListener('click', () => {
+				running = true;
+				startButton.disabled = true;
+				stopButton.disabled = false;
+				ballElement.classList.remove('hidden');
+				setStatus('検知中', '#22c55e');
+				overlayLabel.textContent = '手の動きを検知しています';
+				animationFrame = requestAnimationFrame(detectFrame);
+
 				startCamera().catch((error) => {
 					console.error(error);
-					setStatus('カメラを開けません', '#f59e0b');
-					overlayLabel.textContent = 'カメラ権限を確認してください';
-					startButton.disabled = false;
-					stopButton.disabled = true;
-					closeStreamTracks();
+					setStatus('カメラなし - アニメーション表示', '#7dd3fc');
+					overlayLabel.textContent = 'カメラが利用できないため、玉をアニメーションで表示しています';
 				});
 			});
 
@@ -590,17 +629,6 @@
 			updateMotionDisplay(0);
 			setStatus('カメラ待機中', '#f59e0b');
 
-			// Automatically start camera when page loads
-			window.addEventListener('load', () => {
-				startCamera().catch((error) => {
-					console.error(error);
-					setStatus('カメラを開けません', '#f59e0b');
-					overlayLabel.textContent = 'カメラ権限を確認してください';
-					startButton.disabled = false;
-					stopButton.disabled = true;
-					closeStreamTracks();
-				});
-			});
 		</script>
 	</body>
 </html>
