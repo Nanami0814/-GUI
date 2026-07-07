@@ -9,6 +9,40 @@
 	<body>
 		<h1 class="title">お祓いWebサイト</h1>
 
+		<!-- 背景の幽霊（浄化が進むと薄れる） -->
+		<div id="ghost" aria-hidden="true">
+			<svg viewBox="0 0 200 280" width="100%" height="100%">
+				<defs>
+					<linearGradient id="ghostBody" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0" stop-color="#eef6f9" />
+						<stop offset="1" stop-color="#bcd2dd" />
+					</linearGradient>
+				</defs>
+				<!-- 額の三角（天冠） -->
+				<path d="M100 18 L86 44 L114 44 Z" fill="none" stroke="#dfeaf0" stroke-width="3" opacity="0.8" />
+				<!-- 体 -->
+				<path d="M100 30
+					C58 30 44 70 44 118
+					L44 232
+					Q56 210 68 232
+					Q80 254 92 232
+					Q100 214 108 232
+					Q120 254 132 232
+					Q144 210 156 232
+					L156 118
+					C156 70 142 30 100 30 Z"
+					fill="url(#ghostBody)" />
+				<!-- 両手 -->
+				<path d="M40 150 q-18 6 -14 26 q10 -6 18 -10 Z" fill="url(#ghostBody)" />
+				<path d="M160 150 q18 6 14 26 q-10 -6 -18 -10 Z" fill="url(#ghostBody)" />
+				<!-- 目 -->
+				<ellipse cx="80" cy="120" rx="9" ry="14" fill="#1a2730" />
+				<ellipse cx="120" cy="120" rx="9" ry="14" fill="#1a2730" />
+				<!-- 口 -->
+				<ellipse cx="100" cy="158" rx="9" ry="12" fill="#1a2730" />
+			</svg>
+		</div>
+
 		<!-- 検知用（画面には出さない） -->
 		<video id="video" playsinline muted></video>
 		<canvas id="proc" style="display: none"></canvas>
@@ -16,14 +50,27 @@
 		<!-- three.js の3D御幣＋手のボーン -->
 		<canvas id="scene"></canvas>
 
+		<div id="progress" aria-hidden="true">
+			<span class="progress-label">浄化中…</span>
+			<div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+		</div>
+
+		<div id="complete">お祓い完了！</div>
+
 		<p class="caption" id="caption">読み込み中…</p>
-		<p class="note">映像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。</p>
+		<p class="note">
+			<span class="disclaimer">※ このサイトに実際のお祓い・浄化の効果はありません。娯楽用のデモです。</span>
+			映像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。
+		</p>
 
 		<script type="module">
 			import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 			const video = document.getElementById('video');
 			const caption = document.getElementById('caption');
+			const progressFill = document.getElementById('progress-fill');
+			const completeEl = document.getElementById('complete');
+			const ghostEl = document.getElementById('ghost');
 			const setCaption = (text) => { caption.textContent = text; };
 
 			const NUM_HANDS = 1;
@@ -151,6 +198,59 @@
 			saltPoints.frustumCulled = false;
 			scene.add(saltPoints);
 
+			// ====== 下に積もる塩（ハイトマップ） ======
+			const PILE_BINS = 100;
+			let PILE_MAX = 6;             // 積もりの高さ上限（resizeで画面の高さに合わせる）
+			const PILE_GRAIN = 0.005;      // 1粒あたりの積もり量（少しずつ・ゆっくり）
+			const pileHeight = new Float32Array(PILE_BINS);
+			const pilePositions = new Float32Array(PILE_BINS * 2 * 3);
+			const pileGeo = new THREE.BufferGeometry();
+			pileGeo.setAttribute('position', new THREE.BufferAttribute(pilePositions, 3));
+			const pileIdx = [];
+			for (let i = 0; i < PILE_BINS - 1; i++) {
+				const t = i * 2, bo = i * 2 + 1, tn = (i + 1) * 2, bn = (i + 1) * 2 + 1;
+				pileIdx.push(t, bo, bn, t, bn, tn);
+			}
+			pileGeo.setIndex(pileIdx);
+			const pileMat = new THREE.MeshStandardMaterial({ color: 0xf1ece1, roughness: 1, metalness: 0 });
+			const pileMesh = new THREE.Mesh(pileGeo, pileMat);
+			pileMesh.position.z = -0.05;
+			pileMesh.frustumCulled = false;
+			scene.add(pileMesh);
+
+			const PILE_MAX_STEP = 0.22;    // 隣の山との高低差の上限＝盛り塩の斜面（大きいほど急な三角）
+			const pileBinForX = (x) => {
+				const b = Math.floor(((x + visW / 2) / visW) * PILE_BINS);
+				return Math.max(0, Math.min(PILE_BINS - 1, b));
+			};
+			// 安息角を保つように崩す＝三角（盛り塩）状に積もらせる
+			const relaxPile = () => {
+				for (let iter = 0; iter < 3; iter++) {
+					for (let i = 0; i < PILE_BINS - 1; i++) {
+						const diff = pileHeight[i] - pileHeight[i + 1];
+						if (diff > PILE_MAX_STEP) {
+							const m = (diff - PILE_MAX_STEP) * 0.5;
+							pileHeight[i] -= m; pileHeight[i + 1] += m;
+						} else if (diff < -PILE_MAX_STEP) {
+							const m = (-diff - PILE_MAX_STEP) * 0.5;
+							pileHeight[i] += m; pileHeight[i + 1] -= m;
+						}
+					}
+				}
+			};
+			const rebuildPile = () => {
+				const floorY = -visH / 2;
+				const halfW = visW / 2;
+				for (let i = 0; i < PILE_BINS; i++) {
+					const x = -halfW + ((i + 0.5) / PILE_BINS) * visW;
+					const t = i * 2 * 3, bo = t + 3;
+					pilePositions[t] = x; pilePositions[t + 1] = floorY + pileHeight[i]; pilePositions[t + 2] = 0;
+					pilePositions[bo] = x; pilePositions[bo + 1] = floorY - 0.4; pilePositions[bo + 2] = 0;
+				}
+				pileGeo.attributes.position.needsUpdate = true;
+				pileGeo.computeVertexNormals();
+			};
+
 			let saltCursor = 0;
 			const emitSalt = (n, origin, baseVel, scaleAmt) => {
 				for (let k = 0; k < n; k++) {
@@ -179,10 +279,10 @@
 					const idx = saltCursor;
 					saltCursor = (saltCursor + 1) % MAX_SALT;
 					const b = idx * 3;
-					// 御幣のX位置あたりの帯からのみ降らせる
+					// 画面上部から、御幣（棒）のX位置あたりに細い縦帯で降らせる
 					saltPos[b] = wp.x + (Math.random() - 0.5) * SALT_SPAWN_WIDTH;
-					saltPos[b + 1] = visH / 2 + Math.random() * 1.2;  // 画面上端の少し上
-					saltPos[b + 2] = (Math.random() - 0.5) * 1.2;
+					saltPos[b + 1] = visH / 2 + 0.8 - Math.random() * SALT_SPAWN_HEIGHT;
+					saltPos[b + 2] = (Math.random() - 0.5) * 1.0;
 					saltVel[b] = (Math.random() - 0.5) * 0.15;        // 横流れは控えめ（雪っぽさを消す）
 					saltVel[b + 1] = -1.2 - Math.random() * 0.9;      // まっすぐ速めに落ちる
 					saltVel[b + 2] = (Math.random() - 0.5) * 0.15;
@@ -195,6 +295,7 @@
 			const SALT_LIFE_SEC = 2.0;
 			const updateSalt = (dt) => {
 				const dl = dt / SALT_LIFE_SEC;
+				const floorY = -visH / 2;
 				for (let i = 0; i < MAX_SALT; i++) {
 					if (saltLife[i] <= 0) continue;
 					saltLife[i] -= dl;
@@ -204,10 +305,20 @@
 					saltPos[b] += saltVel[b] * dt;
 					saltPos[b + 1] += saltVel[b + 1] * dt;
 					saltPos[b + 2] += saltVel[b + 2] * dt;
+
+					// 積もりの表面（または床）に達したら、その1点に積もらせて消す（山は relaxPile で三角に整う）
+					const bin = pileBinForX(saltPos[b]);
+					const surfaceY = floorY + pileHeight[bin];
+					if (saltPos[b + 1] <= surfaceY) {
+						pileHeight[bin] = Math.min(PILE_MAX, pileHeight[bin] + PILE_GRAIN);
+						saltLife[i] = 0;
+					}
 				}
 				saltGeo.attributes.position.needsUpdate = true;
 				saltGeo.attributes.aLife.needsUpdate = true;
 				saltGeo.attributes.aSize.needsUpdate = true;
+				relaxPile();   // 盛り塩のように三角へ整える
+				rebuildPile();
 			};
 
 			// ---- 手のボーン（藍色・任意表示） ----
@@ -250,6 +361,7 @@
 				visH = 2 * Math.tan(vFOV / 2) * camera.position.z;
 				visW = visH * camera.aspect;
 				saltMat.uniforms.uScale.value = h * 0.5 * (renderer.getPixelRatio());
+				PILE_MAX = visH; // 画面上部まで積もれるように
 			};
 			window.addEventListener('resize', resize);
 			resize();
@@ -403,10 +515,19 @@
 			// 塩の放出制御
 			let saltLastT = performance.now() / 1000;
 			let saltAccum = 0;
-			const SALT_BASE_RATE = 5;      // 常に降る塩（粒/秒・ごく控えめ）
-			const SALT_DOWN_THRESH = 1.2;  // これ以上の「下向き」速度で振り下ろしと判定
-			const SALT_EMIT_K = 8;         // 下向き速度に対する追加放出量
-			const SALT_SPAWN_WIDTH = 2.6;  // 御幣のX位置を中心に降らせる横幅（ワールド単位）
+			const SALT_BASE_RATE = 1.2;    // 常に降る塩（粒/秒・ごく控えめ）
+			const SALT_DOWN_THRESH = 1.4;  // これ以上の「下向き」速度で振り下ろしと判定
+			const SALT_EMIT_K = 3;         // 下向き速度に対する追加放出量
+			const SALT_SPAWN_WIDTH = 0.9;  // 中央に落とす細い横幅（盛り塩を中央に集める）
+			const SALT_SPAWN_HEIGHT = 1.6; // 上部で縦に少し伸ばす範囲（ワールド単位）
+
+			// お祓いの進行度
+			let purify = 0;
+			let purifyComplete = false;
+			let purifyHold = 0;
+			const PURIFY_GAIN = 0.035;         // 振り下ろしで進む速さ（ゆっくり）
+			const PURIFY_DECAY = 0.04;         // 振らないと少しずつ戻る
+			const PURIFY_COMPLETE_HOLD = 4.5;  // 完了表示の時間（秒）→ 経過後リセット
 
 			const loop = () => {
 				try {
@@ -447,11 +568,38 @@
 					const downSpeed = Math.max(0, -lastWandDelta.y) / Math.max(dt, 0.001);
 					saltAccum += SALT_BASE_RATE * dt; // 常に静かに降る（控えめ）
 					if (wand.visible && downSpeed > SALT_DOWN_THRESH) {
-						saltAccum += Math.min(200, (downSpeed - SALT_DOWN_THRESH) * SALT_EMIT_K); // 振り下ろすと増える
+						saltAccum += Math.min(70, (downSpeed - SALT_DOWN_THRESH) * SALT_EMIT_K); // 振り下ろすと増える
 					}
 					const emitN = Math.floor(saltAccum);
 					if (emitN > 0) { emitSaltRain(emitN); saltAccum -= emitN; }
 					updateSalt(dt);
+
+					// お祓いの進行度：振り下ろし続けると溜まり、満タンで「完了！」
+					if (!purifyComplete) {
+						if (wand.visible && downSpeed > SALT_DOWN_THRESH) {
+							purify += Math.min(12, downSpeed - SALT_DOWN_THRESH) * PURIFY_GAIN * dt;
+						} else {
+							purify -= PURIFY_DECAY * dt;
+						}
+						purify = Math.max(0, Math.min(1, purify));
+						progressFill.style.width = (purify * 100) + '%';
+						// 浄化が進むほど幽霊が薄れる
+						ghostEl.style.opacity = (0.85 * (1 - purify)).toFixed(3);
+						if (purify >= 1) {
+							purifyComplete = true;
+							purifyHold = 0;
+							completeEl.classList.add('show');
+							emitSaltRain(260); // 完了の祝いの塩
+						}
+					} else {
+						purifyHold += dt;
+						if (purifyHold > PURIFY_COMPLETE_HOLD) {
+							purifyComplete = false;
+							purify = 0;
+							progressFill.style.width = '0%';
+							completeEl.classList.remove('show');
+						}
+					}
 
 					renderer.render(scene, camera);
 					requestAnimationFrame(loop);
