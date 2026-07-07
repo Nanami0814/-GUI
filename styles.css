@@ -1,9 +1,11 @@
 :root {
-	--washi: #efe7d6;
-	--sumi: #2b2a27;
-	--sumi-soft: #6b665c;
-	--shu: #c8442f;
-	--line: rgba(43, 42, 39, 0.18);
+	color-scheme: dark;
+	--bg-deep: #070b11;
+	--bg: #0e1a24;
+	--ink: #ece4d3;
+	--ink-soft: #9aa6ad;
+	--shu: #d24a34;
+	--line: rgba(236, 228, 211, 0.16);
 }
 
 * {
@@ -21,11 +23,17 @@ body {
 	overflow: hidden;
 	position: relative;
 	font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", serif;
-	color: var(--sumi);
-	background-color: var(--washi);
+	color: var(--ink);
+	background-color: var(--bg-deep);
 	background-image:
-		radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.5), transparent 60%),
-		repeating-linear-gradient(90deg, rgba(43, 42, 39, 0.015) 0 2px, transparent 2px 4px);
+		/* 灯りのような暖かい光 */
+		radial-gradient(ellipse at 50% 12%, rgba(210, 74, 52, 0.16), transparent 45%),
+		/* 上部のほのかな明かり */
+		radial-gradient(circle at 50% 0%, rgba(120, 150, 170, 0.14), transparent 55%),
+		/* 足元の朱の気配 */
+		radial-gradient(ellipse at 50% 108%, rgba(210, 74, 52, 0.12), transparent 50%),
+		/* 全体の藍〜墨のグラデーション */
+		linear-gradient(180deg, #0e1a24 0%, #0a121a 55%, #070b11 100%);
 }
 
 .title {
@@ -39,6 +47,8 @@ body {
 	font-weight: 500;
 	letter-spacing: 0.28em;
 	text-indent: 0.28em;
+	color: var(--ink);
+	text-shadow: 0 0 18px rgba(210, 74, 52, 0.35), 0 1px 2px rgba(0, 0, 0, 0.5);
 	z-index: 2;
 }
 
@@ -79,7 +89,7 @@ body {
 	margin: 0;
 	min-height: 1.4em;
 	text-align: center;
-	color: var(--sumi-soft);
+	color: var(--ink-soft);
 	font-size: 1rem;
 	letter-spacing: 0.18em;
 	z-index: 2;
@@ -92,7 +102,7 @@ body {
 	right: 0;
 	margin: 0;
 	text-align: center;
-	color: var(--sumi-soft);
+	color: var(--ink-soft);
 	font-size: 0.8rem;
 	letter-spacing: 0.08em;
 	opacity: 0.7;

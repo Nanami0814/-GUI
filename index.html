@@ -108,6 +108,108 @@
 			wand.visible = false;
 			scene.add(wand);
 
+			// ====== 塩のパーティクル（振ると降る） ======
+			const MAX_SALT = 9000;
+			const saltPos = new Float32Array(MAX_SALT * 3);
+			const saltVel = new Float32Array(MAX_SALT * 3);
+			const saltLife = new Float32Array(MAX_SALT); // 残り寿命 0..1
+			const saltSizeAttr = new Float32Array(MAX_SALT);
+			const saltGeo = new THREE.BufferGeometry();
+			saltGeo.setAttribute('position', new THREE.BufferAttribute(saltPos, 3));
+			saltGeo.setAttribute('aLife', new THREE.BufferAttribute(saltLife, 1));
+			saltGeo.setAttribute('aSize', new THREE.BufferAttribute(saltSizeAttr, 1));
+			const saltMat = new THREE.ShaderMaterial({
+				transparent: true,
+				depthWrite: false,
+				uniforms: { uScale: { value: 400 } },
+				vertexShader: `
+					attribute float aLife;
+					attribute float aSize;
+					varying float vAlpha;
+					uniform float uScale;
+					void main() {
+						vec4 mv = modelViewMatrix * vec4(position, 1.0);
+						vAlpha = smoothstep(0.0, 0.25, aLife);
+						gl_PointSize = aSize * (uScale / -mv.z);
+						gl_Position = projectionMatrix * mv;
+						if (aLife <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // 死んだ粒は画面外へ
+					}
+				`,
+				fragmentShader: `
+					varying float vAlpha;
+					void main() {
+						vec2 c = gl_PointCoord - vec2(0.5);
+						float d = length(c);
+						if (d > 0.5) discard;
+						// 塩粒らしい硬いエッジ（中心はしっかり不透明、縁だけ軽く落とす）
+						float grain = 1.0 - smoothstep(0.36, 0.5, d);
+						gl_FragColor = vec4(1.0, 1.0, 1.0, vAlpha * grain);
+					}
+				`,
+			});
+			const saltPoints = new THREE.Points(saltGeo, saltMat);
+			saltPoints.frustumCulled = false;
+			scene.add(saltPoints);
+
+			let saltCursor = 0;
+			const emitSalt = (n, origin, baseVel, scaleAmt) => {
+				for (let k = 0; k < n; k++) {
+					let idx = -1;
+					for (let s = 0; s < MAX_SALT; s++) {
+						const j = (saltCursor + s) % MAX_SALT;
+						if (saltLife[j] <= 0) { idx = j; saltCursor = (j + 1) % MAX_SALT; break; }
+					}
+					if (idx < 0) return; // 使い切り
+					const b = idx * 3;
+					const spread = 0.22 * scaleAmt;
+					saltPos[b] = origin.x + (Math.random() - 0.5) * spread;
+					saltPos[b + 1] = origin.y + (Math.random() - 0.5) * spread;
+					saltPos[b + 2] = origin.z + (Math.random() - 0.5) * spread;
+					saltVel[b] = baseVel.x * (0.4 + Math.random() * 0.8) + (Math.random() - 0.5) * 0.7;
+					saltVel[b + 1] = baseVel.y * (0.2 + Math.random() * 0.4) + Math.random() * 0.3;
+					saltVel[b + 2] = baseVel.z * (0.4 + Math.random() * 0.8) + (Math.random() - 0.5) * 0.7;
+					saltLife[idx] = 1.0;
+					saltSizeAttr[idx] = (0.03 + Math.random() * 0.035) * Math.max(scaleAmt, 0.4);
+				}
+			};
+
+			// 画面の上から塩を降らせる（リングバッファ方式：必ず放出される）
+			const emitSaltRain = (n) => {
+				for (let k = 0; k < n; k++) {
+					const idx = saltCursor;
+					saltCursor = (saltCursor + 1) % MAX_SALT;
+					const b = idx * 3;
+					// 御幣のX位置あたりの帯からのみ降らせる
+					saltPos[b] = wp.x + (Math.random() - 0.5) * SALT_SPAWN_WIDTH;
+					saltPos[b + 1] = visH / 2 + Math.random() * 1.2;  // 画面上端の少し上
+					saltPos[b + 2] = (Math.random() - 0.5) * 1.2;
+					saltVel[b] = (Math.random() - 0.5) * 0.15;        // 横流れは控えめ（雪っぽさを消す）
+					saltVel[b + 1] = -1.2 - Math.random() * 0.9;      // まっすぐ速めに落ちる
+					saltVel[b + 2] = (Math.random() - 0.5) * 0.15;
+					saltLife[idx] = 1.0;
+					saltSizeAttr[idx] = 0.1 + Math.random() * 0.07;
+				}
+			};
+
+			const SALT_GRAVITY = 6.5;
+			const SALT_LIFE_SEC = 2.0;
+			const updateSalt = (dt) => {
+				const dl = dt / SALT_LIFE_SEC;
+				for (let i = 0; i < MAX_SALT; i++) {
+					if (saltLife[i] <= 0) continue;
+					saltLife[i] -= dl;
+					if (saltLife[i] < 0) saltLife[i] = 0;
+					const b = i * 3;
+					saltVel[b + 1] -= SALT_GRAVITY * dt;
+					saltPos[b] += saltVel[b] * dt;
+					saltPos[b + 1] += saltVel[b + 1] * dt;
+					saltPos[b + 2] += saltVel[b + 2] * dt;
+				}
+				saltGeo.attributes.position.needsUpdate = true;
+				saltGeo.attributes.aLife.needsUpdate = true;
+				saltGeo.attributes.aSize.needsUpdate = true;
+			};
+
 			// ---- 手のボーン（藍色・任意表示） ----
 			const jointMat = new THREE.MeshStandardMaterial({ color: 0x33576a, roughness: 0.5, metalness: 0.1 });
 			const boneMat = new THREE.MeshStandardMaterial({ color: 0x2d4a5a, roughness: 0.6, metalness: 0.1 });
@@ -147,6 +249,7 @@
 				const vFOV = THREE.MathUtils.degToRad(camera.fov);
 				visH = 2 * Math.tan(vFOV / 2) * camera.position.z;
 				visW = visH * camera.aspect;
+				saltMat.uniforms.uScale.value = h * 0.5 * (renderer.getPixelRatio());
 			};
 			window.addEventListener('resize', resize);
 			resize();
@@ -167,11 +270,14 @@
 			let prevInit = false;
 			const wp = new THREE.Vector3();
 			const wq = new THREE.Quaternion();
+			const lastWandDelta = new THREE.Vector3(); // 御幣の1フレームのワールド移動量（塩の放出に使う）
 			const updatePaper = () => {
+				wand.updateMatrixWorld();
 				wand.getWorldPosition(wp);
 				if (!prevInit) { prevPos.copy(wp); prevInit = true; }
 				const dWorld = wp.clone().sub(prevPos);
 				prevPos.copy(wp);
+				lastWandDelta.copy(dWorld);
 				// 移動量を御幣ローカル方向へ変換し、逆向きに靡かせる
 				wand.getWorldQuaternion(wq).invert();
 				const dLocal = dWorld.applyQuaternion(wq);
@@ -294,6 +400,14 @@
 			let handLandmarker = null;
 			let modelFailed = false;
 
+			// 塩の放出制御
+			let saltLastT = performance.now() / 1000;
+			let saltAccum = 0;
+			const SALT_BASE_RATE = 5;      // 常に降る塩（粒/秒・ごく控えめ）
+			const SALT_DOWN_THRESH = 1.2;  // これ以上の「下向き」速度で振り下ろしと判定
+			const SALT_EMIT_K = 8;         // 下向き速度に対する追加放出量
+			const SALT_SPAWN_WIDTH = 2.6;  // 御幣のX位置を中心に降らせる横幅（ワールド単位）
+
 			const loop = () => {
 				try {
 					if (!running) return;
@@ -324,6 +438,21 @@
 					wand.visible = true;
 				} finally {
 					updatePaper(); // 白い紙のゆらぎ
+
+					// 塩：振りが速いほど、画面の上から降り注ぐ
+					const now = performance.now() / 1000;
+					const dt = Math.min(0.05, now - saltLastT);
+					saltLastT = now;
+					// 下向きの速度（振り下ろし）だけを見る
+					const downSpeed = Math.max(0, -lastWandDelta.y) / Math.max(dt, 0.001);
+					saltAccum += SALT_BASE_RATE * dt; // 常に静かに降る（控えめ）
+					if (wand.visible && downSpeed > SALT_DOWN_THRESH) {
+						saltAccum += Math.min(200, (downSpeed - SALT_DOWN_THRESH) * SALT_EMIT_K); // 振り下ろすと増える
+					}
+					const emitN = Math.floor(saltAccum);
+					if (emitN > 0) { emitSaltRain(emitN); saltAccum -= emitN; }
+					updateSalt(dt);
+
 					renderer.render(scene, camera);
 					requestAnimationFrame(loop);
 				}
