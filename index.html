@@ -18,33 +18,29 @@
 						<stop offset="1" stop-color="#dfe8ed" />
 					</linearGradient>
 				</defs>
-				<!-- 体（丸い頭＋下側が膨らむ裾広がり） -->
-				<path d="M100 30
-					C64 30 53 58 52 96
-					C50 138 45 188 43 236
-					C42 250 49 261 57 257
-					C65 253 71 256 78 265
-					C86 274 95 273 100 264
-					C105 273 114 274 122 265
-					C129 256 135 253 143 257
-					C151 261 158 250 157 236
-					C155 188 150 138 148 96
-					C147 58 136 30 100 30 Z"
+				<!-- 体（より丸く少し大きめ） -->
+				<path d="M100 24
+					C58 24 44 56 44 98
+					C44 144 39 193 37 240
+					C36 256 45 267 56 263
+					C65 260 71 263 78 272
+					C86 282 94 281 100 271
+					C106 281 114 282 122 272
+					C129 263 135 260 144 263
+					C155 267 164 256 163 240
+					C161 193 156 144 156 98
+					C156 56 142 24 100 24 Z"
 					fill="url(#ghostBody)" stroke="#2b2b2b" stroke-width="2" stroke-opacity="0.6" />
-				<!-- 鉢巻（水平に渡る二重線） -->
-				<path d="M52 93 Q100 98 148 93" fill="none" stroke="#3a3a3a" stroke-width="2" stroke-opacity="0.75" stroke-linecap="round" />
-				<path d="M52 98 Q100 103 148 98" fill="none" stroke="#3a3a3a" stroke-width="2" stroke-opacity="0.75" stroke-linecap="round" />
-				<!-- 額の三角（鉢巻の上に乗る） -->
-				<path d="M86 96 L100 64 L114 96" fill="none" stroke="#3a3a3a" stroke-width="2" stroke-opacity="0.8" stroke-linejoin="round" stroke-linecap="round" />
 				<!-- 目 -->
-				<ellipse cx="85" cy="122" rx="12" ry="16" fill="#404040" />
-				<ellipse cx="115" cy="122" rx="12" ry="16" fill="#404040" />
+				<ellipse cx="80" cy="118" rx="12" ry="16" fill="#404040" />
+				<ellipse cx="120" cy="118" rx="12" ry="16" fill="#404040" />
 			</svg>
 		</div>
 
 		<!-- 検知用（画面には出さない） -->
 		<video id="video" playsinline muted></video>
 		<canvas id="proc" style="display: none"></canvas>
+		<audio id="bgm" src="五七の調べ.mp3" loop preload="auto" hidden></audio>
 
 		<!-- three.js の3D御幣＋手のボーン -->
 		<canvas id="scene"></canvas>
@@ -54,11 +50,13 @@
 			<div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
 		</div>
 
-		<div id="complete">お祓い完了！</div>
+		<div id="complete">
+			<span class="complete-main">お祓い完了</span>
+			<span class="complete-sub">このサイトの霊は浄化されました</span>
+		</div>
 
 		<p class="caption" id="caption">読み込み中…</p>
 		<p class="note">
-			<span class="disclaimer">※ このサイトに実際のお祓い・浄化の効果はありません。娯楽用のデモです。</span>
 			映像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。
 		</p>
 
@@ -66,7 +64,28 @@
 			import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 			const video = document.getElementById('video');
+			const bgm = document.getElementById('bgm');
 			const caption = document.getElementById('caption');
+			const startBgm = async () => {
+				try {
+					bgm.currentTime = 0;
+					await bgm.play();
+					return true;
+				} catch (error) {
+					console.warn('BGM playback failed', error);
+					return false;
+				}
+			};
+			const unlockBgm = async () => {
+				if (await startBgm()) {
+					window.removeEventListener('pointerdown', unlockBgm);
+					window.removeEventListener('keydown', unlockBgm);
+					window.removeEventListener('touchstart', unlockBgm);
+				}
+			};
+			window.addEventListener('pointerdown', unlockBgm, { once: true });
+			window.addEventListener('keydown', unlockBgm, { once: true });
+			window.addEventListener('touchstart', unlockBgm, { once: true });
 			const progressFill = document.getElementById('progress-fill');
 			const completeEl = document.getElementById('complete');
 			const ghostEl = document.getElementById('ghost');
@@ -524,7 +543,7 @@
 			let purify = 0;
 			let purifyComplete = false;
 			let purifyHold = 0;
-			const PURIFY_GAIN = 0.035;         // 振り下ろしで進む速さ（ゆっくり）
+			const PURIFY_GAIN = 0.042;         // 振り下ろしで進む速さ（少しはやめ）
 			const PURIFY_DECAY = 0.04;         // 振らないと少しずつ戻る
 			const PURIFY_COMPLETE_HOLD = 4.5;  // 完了表示の時間（秒）→ 経過後リセット
 
@@ -651,6 +670,9 @@
 				stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
 				video.srcObject = stream;
 				await video.play();
+				bgm.loop = true;
+				bgm.volume = 0.6;
+				await startBgm();
 				running = true;
 				previousGray = null;
 				wand.visible = true;

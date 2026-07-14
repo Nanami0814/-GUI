@@ -184,12 +184,12 @@ body {
 #complete {
 	position: fixed;
 	inset: 0;
-	display: grid;
-	place-items: center;
+	display: block;
 	z-index: 3;
 	pointer-events: none;
 	text-align: center;
-	font-size: clamp(2.8rem, 11vw, 6rem);
+	--complete-size: clamp(2.8rem, 11vw, 6rem);
+	font-size: var(--complete-size);
 	font-weight: 700;
 	letter-spacing: 0.18em;
 	color: #fff;
@@ -198,6 +198,27 @@ body {
 	visibility: hidden;
 	transform: scale(0.82);
 	transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#complete .complete-main {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	display: block;
+	white-space: nowrap;
+}
+
+#complete .complete-sub {
+	position: absolute;
+	left: 50%;
+	top: calc(50% + var(--complete-size) * 0.58);
+	transform: translateX(-50%);
+	display: block;
+	font-size: 0.5em;
+	letter-spacing: 0.12em;
+	line-height: 1.1;
+	white-space: nowrap;
 }
 
 /* 完了文字を読みやすくする暗い光背 */
