@@ -2,7 +2,10 @@
 <html lang="ja">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="theme-color" content="#070b11" />
 		<title>お祓いWebサイト</title>
 		<link rel="stylesheet" href="styles.css" />
 	</head>
@@ -272,7 +275,7 @@
 			const pileMesh = new THREE.Mesh(pileGeo, pileMat);
 			pileMesh.position.z = -0.05;
 			pileMesh.frustumCulled = false;
-			scene.add(pileMesh);
+			// scene.add(pileMesh); // 塩の積もり機能を無効化
 
 			const PILE_MAX_STEP = 0.22;    // 隣の山との高低差の上限＝盛り塩の斜面（大きいほど急な三角）
 			const pileBinForX = (x) => {
@@ -362,19 +365,21 @@
 					saltPos[b + 1] += saltVel[b + 1] * dt;
 					saltPos[b + 2] += saltVel[b + 2] * dt;
 
-					// 積もりの表面（または床）に達したら、その1点に積もらせて消す（山は relaxPile で三角に整う）
+					// 塩の積もり機能を無効化
+					/*
 					const bin = pileBinForX(saltPos[b]);
 					const surfaceY = floorY + pileHeight[bin];
 					if (saltPos[b + 1] <= surfaceY) {
 						pileHeight[bin] = Math.min(PILE_MAX, pileHeight[bin] + PILE_GRAIN);
 						saltLife[i] = 0;
 					}
+					*/
 				}
 				saltGeo.attributes.position.needsUpdate = true;
 				saltGeo.attributes.aLife.needsUpdate = true;
 				saltGeo.attributes.aSize.needsUpdate = true;
-				relaxPile();   // 盛り塩のように三角へ整える
-				rebuildPile();
+				// relaxPile();   // 盛り塩のように三角へ整える
+				// rebuildPile();
 			};
 
 			// ---- 手のボーン（藍色・任意表示） ----
