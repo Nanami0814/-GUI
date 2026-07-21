@@ -53,12 +53,21 @@ body {
 }
 
 .title::after {
-	content: "";
-	display: block;
-	width: 56px;
-	height: 1px;
-	margin: 16px auto 0;
-	background: var(--shu);
+	display: none;
+}
+
+/* 赤い結び目のイラスト */
+.red-knot-decoration {
+	position: fixed;
+	top: 66px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 2;
+	pointer-events: none;
+}
+
+.red-knot-svg {
+	filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2));
 }
 
 /* 背景の幽霊 */
@@ -83,6 +92,30 @@ body {
 	100% { transform: translate(-50%, -50%) translate(0, 0) rotate(-1.5deg); }
 }
 
+/* 浄化エフェクト */
+@keyframes purifyEffect {
+	0% {
+		filter: drop-shadow(0 0 34px rgba(150, 200, 220, 0.5));
+		transform: translate(-50%, -50%) translate(0, 0) rotate(-1.5deg) scale(1);
+	}
+	30% {
+		filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 40px rgba(240, 200, 100, 0.6)) drop-shadow(0 0 60px rgba(200, 150, 80, 0.4));
+		transform: translate(-50%, -50%) translate(0, -8px) rotate(-1.5deg) scale(0.98);
+	}
+	60% {
+		filter: drop-shadow(0 0 50px rgba(255, 255, 255, 1)) drop-shadow(0 0 80px rgba(240, 200, 100, 0.8)) drop-shadow(0 0 100px rgba(200, 150, 80, 0.6));
+		transform: translate(-50%, -50%) translate(0, -6px) rotate(-1.5deg) scale(0.95);
+	}
+	100% {
+		filter: drop-shadow(0 0 34px rgba(150, 200, 220, 0.5)) drop-shadow(0 0 40px rgba(240, 200, 100, 0.2));
+		transform: translate(-50%, -50%) translate(0, 0) rotate(-1.5deg) scale(1);
+	}
+}
+
+#ghost.purifying {
+	animation: purifyEffect 0.8s ease-out !important;
+}
+
 /* 映像は画面に出さず、検知のためだけに裏で再生する */
 #video {
 	position: fixed;
@@ -105,16 +138,25 @@ body {
 
 .caption {
 	position: fixed;
-	bottom: 44px;
+	bottom: 58px;
 	left: 0;
 	right: 0;
 	margin: 0;
 	min-height: 1.4em;
+	padding: 0 20px;
 	text-align: center;
-	color: var(--ink-soft);
-	font-size: 1rem;
-	letter-spacing: 0.18em;
+	color: #fff3d5;
+	font-size: clamp(1.2rem, 3vw, 1.6rem);
+	font-weight: 700;
+	letter-spacing: 0.24em;
+	text-shadow: 0 0 18px rgba(240, 176, 58, 0.48), 0 1px 4px rgba(0, 0, 0, 0.45);
 	z-index: 2;
+	animation: captionPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes captionPulse {
+	0%, 100% { transform: translateY(0); opacity: 1; }
+	50% { transform: translateY(-2px); opacity: 0.9; }
 }
 
 .note {
@@ -123,12 +165,14 @@ body {
 	left: 0;
 	right: 0;
 	margin: 0;
+	padding: 0 20px;
 	text-align: center;
-	color: var(--ink-soft);
-	font-size: 0.8rem;
+	color: #fffdf7;
+	font-size: 0.9rem;
 	letter-spacing: 0.08em;
 	line-height: 1.7;
 	z-index: 2;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .note .disclaimer {
@@ -144,7 +188,7 @@ body {
 #progress {
 	position: fixed;
 	left: 50%;
-	bottom: 96px;
+	bottom: 118px;
 	transform: translateX(-50%);
 	width: min(560px, 86vw);
 	display: flex;

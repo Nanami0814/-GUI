@@ -8,6 +8,41 @@
 	</head>
 	<body>
 		<h1 class="title">お祓いWebサイト</h1>
+		
+		<!-- 二重叶結びのイラスト -->
+		<div class="red-knot-decoration" aria-hidden="true">
+			<svg viewBox="0 0 595.3 841.9" width="120" height="180" class="red-knot-svg">
+				<defs>
+					<style>
+						.st0 {
+							stroke-width: 9.9px;
+							fill: none;
+							stroke: #d24a34;
+							stroke-linecap: round;
+							stroke-linejoin: round;
+							stroke-miterlimit: 10;
+						}
+						.st1 {
+							stroke-width: 11.3px;
+							fill: none;
+							stroke: #d24a34;
+							stroke-linecap: round;
+							stroke-linejoin: round;
+							stroke-miterlimit: 10;
+						}
+					</style>
+				</defs>
+				<path class="st0" d="M339.9,186.1c0,34.9-19.4,78-43.2,78s-43.2-43.1-43.2-78,19.4-53.9,43.2-53.9,43.2,19.1,43.2,53.9Z"/>
+				<path class="st0" d="M380.3,297.5c-33.1,10.9-75.7-1.4-82.7-22.3s24.5-42.7,57.6-53.6,54.2.4,61.1,21.3c6.9,21-3,43.7-36.1,54.6Z"/>
+				<path class="st0" d="M219.7,305c-34.7-3.4-56.4-23.2-54.2-45.8,2.2-22.6,27.4-39.3,62.2-35.9,34.7,3.4,67.5,25.1,65.3,47.7-2.2,22.6-38.6,37.4-73.3,34Z"/>
+				<path class="st0" d="M277.6,262.4s.7-8.5,5.8-14.3,6.1-5.1,11.2-5.2"/>
+				<path class="st0" d="M318.9,256.2s-16.7,3.2-21.8-15.4"/>
+				<path class="st1" d="M279.5,262.2s-.8,11.9,18.6,16.1"/>
+				<path class="st1" d="M316.1,261s-15.7,11.5-19.1,21.1"/>
+				<path class="st1" d="M284.9,289.3c-6.3,0-42.5,43.7-55.8,113.9"/>
+				<path class="st1" d="M308,289.3s40.1,68.8,48,106.6"/>
+			</svg>
+		</div>
 
 		<!-- 背景の幽霊（浄化が進むと薄れる） -->
 		<div id="ghost" aria-hidden="true">
@@ -57,7 +92,7 @@
 
 		<p class="caption" id="caption">読み込み中…</p>
 		<p class="note">
-			映像は端末内でのみ処理されます。ブラウザのカメラ許可が必要です。
+			映像はこの端末の中だけで処理されます。カメラの使用を許可してください。
 		</p>
 
 		<script type="module">
@@ -89,7 +124,10 @@
 			const progressFill = document.getElementById('progress-fill');
 			const completeEl = document.getElementById('complete');
 			const ghostEl = document.getElementById('ghost');
+			const GUIDE_TEXT = '手を大きく振ってください';
 			const setCaption = (text) => { caption.textContent = text; };
+			let lastPurifyEffectTime = 0;
+			const PURIFY_EFFECT_COOLDOWN = 0.6;
 
 			const NUM_HANDS = 1;
 			const HAND_CONNECTIONS = [
@@ -543,8 +581,8 @@
 			let purify = 0;
 			let purifyComplete = false;
 			let purifyHold = 0;
-			const PURIFY_GAIN = 0.042;         // 振り下ろしで進む速さ（少しはやめ）
-			const PURIFY_DECAY = 0.04;         // 振らないと少しずつ戻る
+			const PURIFY_GAIN = 0.12;          // 振り下ろしで進む速さ（より早く貯まる）
+			const PURIFY_DECAY = 0.03;         // 振らないと少しずつ戻る
 			const PURIFY_COMPLETE_HOLD = 4.5;  // 完了表示の時間（秒）→ 経過後リセット
 
 			const loop = () => {
@@ -564,15 +602,14 @@
 					}
 					if (handActive) {
 						hand.visible = true;
-						setCaption('祓い清め中…');
 					} else {
 						hand.visible = false;
 						hasSmooth = false;
 						const moved = detectMotion();
 						updateWandByMotion();
-						if (modelFailed) setCaption(moved ? '祓い清め中…（手の表示なし）' : '手を動かしてください');
-						else if (handLandmarker) setCaption('手をかざしてください');
-						else setCaption(moved ? '祓い清め中…' : '手を動かしてください');
+					}
+					if (caption.textContent !== GUIDE_TEXT) {
+						setCaption(GUIDE_TEXT);
 					}
 					wand.visible = true;
 				} finally {
@@ -595,8 +632,14 @@
 					// お祓いの進行度：振り下ろし続けると溜まり、満タンで「完了！」
 					if (!purifyComplete) {
 						if (wand.visible && downSpeed > SALT_DOWN_THRESH) {
-							purify += Math.min(12, downSpeed - SALT_DOWN_THRESH) * PURIFY_GAIN * dt;
-						} else {
+							purify += Math.min(12, downSpeed - SALT_DOWN_THRESH) * PURIFY_GAIN * dt;						
+						// 浄化エフェクト：振り下ろし時に幽霊に浄化的な光が出る
+						if (now - lastPurifyEffectTime > PURIFY_EFFECT_COOLDOWN) {
+							ghostEl.classList.remove('purifying');
+							void ghostEl.offsetWidth; // リフロー強制
+							ghostEl.classList.add('purifying');
+							lastPurifyEffectTime = now;
+						}						} else {
 							purify -= PURIFY_DECAY * dt;
 						}
 						purify = Math.max(0, Math.min(1, purify));
@@ -676,7 +719,7 @@
 				running = true;
 				previousGray = null;
 				wand.visible = true;
-				setCaption('手を動かしてください');
+				setCaption('手を大きく振ってください');
 				requestAnimationFrame(loop);
 				initHandTracking();
 			};
